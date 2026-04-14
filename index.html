@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statement Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+        
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .receipt-font { font-family: 'JetBrains Mono', monospace; }
+        
+        .card-shadow { box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); }
+        
+        .config-input { 
+            border: 1px solid #e2e8f0; 
+            border-radius: 0.375rem; 
+            padding: 0.25rem 0.5rem; 
+            width: 100%; 
+            font-size: 0.7rem; 
+            outline-color: #3b82f6; 
+            transition: all 0.2s; 
+            text-align: right; 
+            background: white;
+        }
+        .config-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+        
+        .receipt-paper {
+            background: #fff;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+            border-top: 10px solid #000;
+            position: relative;
+            color: #000;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; }
+            .receipt-paper { box-shadow: none; border: 1px solid #000 !important; padding: 1.5rem; width: 100%; }
+            main { padding: 0; }
+        }
+
+        .tab-active { color: #1e40af; border-bottom: 2px solid #1e40af; font-weight: 700; }
+        .config-grid-header { background: #f1f5f9; font-weight: 700; font-size: 0.6rem; color: #64748b; text-transform: uppercase; padding: 0.4rem; text-align: center; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; min-height: 40px; }
+        .config-grid-cell { border: 1px solid #e2e8f0; padding: 0.2rem; display: flex; align-items: center; justify-content: center; background: white; }
+        
+        .matrix-table { width: 100%; font-size: 0.65rem; border-collapse: collapse; }
+        .matrix-table th { background: #075985; color: white; padding: 6px; border: 1px solid #0369a1; text-transform: uppercase; letter-spacing: 0.05em; }
+        .matrix-table td { border: 1px solid #e2e8f0; padding: 2px 4px; text-align: right; }
+        .matrix-table td:first-child { text-align: center; font-weight: bold; background: #f0f9ff; width: 40px; }
+        .matrix-table tr:nth-child(even) { background: #f8fafc; }
+        .matrix-input { width: 100%; background: transparent; border: none; text-align: right; font-family: inherit; font-size: inherit; outline: none; padding: 2px; }
+        .matrix-input:focus { background: #fff; box-shadow: inset 0 0 0 1px #3b82f6; border-radius: 2px; }
+
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- LOGIN OVERLAY -->
+    <div id="login-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center no-print">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md transform transition-all border border-slate-100">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-black text-slate-800">Admin Portal</h1>
+                <p class="text-slate-400 text-sm font-medium">Please sign in to access configurations</p>
+            </div>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Username</label>
+                    <input type="text" id="login-user" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 font-bold outline-none focus:ring-2 focus:ring-blue-100 focus:bg-white transition-all" placeholder="Enter username">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Password</label>
+                    <input type="password" id="login-pass" required class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 font-bold outline-none focus:ring-2 focus:ring-blue-100 focus:bg-white transition-all" placeholder="••••••••">
+                </div>
+                <div id="login-error" class="hidden text-rose-500 text-[10px] font-bold uppercase text-center bg-rose-50 py-2 rounded-lg">Invalid credentials</div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeLogin(true)" class="flex-1 bg-slate-100 text-slate-600 py-4 rounded-xl font-bold hover:bg-slate-200 transition-all">Cancel</button>
+                    <button type="submit" class="flex-2 bg-blue-600 text-white py-4 px-8 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">Sign In</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 no-print">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center">
+                <h1 class="text-lg font-extrabold tracking-tight">Statement <span class="text-blue-600 font-medium">Generator</span></h1>
+            </div>
+            <nav class="flex space-x-8">
+                <button onclick="switchTab('portal')" id="nav-portal" class="tab-active py-5 text-xs uppercase tracking-widest transition-all">Assessment</button>
+                <button onclick="openLogin()" id="nav-config-btn" class="py-5 text-xs text-slate-400 uppercase tracking-widest transition-all hover:text-slate-600">Configuration</button>
+                <div id="admin-badge" class="hidden items-center">
+                    <button onclick="handleLogout()" class="text-[9px] bg-rose-50 text-rose-600 px-3 py-1 rounded-full font-black border border-rose-100 hover:bg-rose-100 transition-all">LOGOUT ADMIN</button>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
+        
+        <!-- SECTION: CONFIGURATION -->
+        <section id="sect-config" class="hidden no-print">
+            <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tight">System Configuration</h2>
+                </div>
+                <button onclick="saveAndSync()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-200">
+                    Save Changes
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Group 1: High Level Settings -->
+                <div class="flex flex-col gap-6">
+                    <!-- Global Settings -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 card-shadow">
+                        <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest border-l-4 border-slate-600 pl-2">General Settings</h3>
+                        <div class="space-y-4">
+                            <div class="p-3 bg-slate-50 rounded-lg">
+                                <h4 class="text-[9px] font-black text-slate-400 uppercase mb-2">Academic Year</h4>
+                                <input type="text" id="config-ay" class="config-input !text-left" placeholder="e.g., 2025-2026">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Discounts Presets -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 card-shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-xs uppercase text-slate-400 tracking-widest border-l-4 border-teal-600 pl-2">Discount Presets</h3>
+                            <button onclick="addNewDiscount()" class="text-[10px] bg-teal-50 text-teal-600 font-bold px-2 py-1 rounded hover:bg-teal-100 transition-colors">+ ADD</button>
+                        </div>
+                        <div class="grid grid-cols-2">
+                            <div class="config-grid-header">Category Name</div>
+                            <div class="config-grid-header">Rate (%)</div>
+                            <div id="grid-discounts" class="contents"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Books -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 card-shadow">
+                    <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest border-l-4 border-blue-600 pl-2">Books/Notebooks Pricing</h3>
+                    <div class="max-h-[500px] overflow-y-auto scrollbar-hide border border-slate-100 rounded-lg">
+                        <div class="grid grid-cols-2 sticky top-0 z-10">
+                            <div class="config-grid-header">Grade Reference</div>
+                            <div class="config-grid-header">Price (₱)</div>
+                        </div>
+                        <div id="grid-books" class="grid grid-cols-2"></div>
+                    </div>
+                </div>
+
+                <!-- Supplies -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 card-shadow h-fit">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-xs uppercase text-slate-400 tracking-widest border-l-4 border-indigo-600 pl-2">Uniforms & Other Fees</h3>
+                        <button onclick="addNewSupply()" class="text-[10px] bg-indigo-50 text-indigo-600 font-bold px-2 py-1 rounded hover:bg-indigo-100 transition-colors">+ ADD ITEM</button>
+                    </div>
+                    <div class="grid grid-cols-2">
+                        <div class="config-grid-header">Item Name</div>
+                        <div class="config-grid-header">Price (₱)</div>
+                        <div id="grid-supplies" class="contents"></div>
+                    </div>
+                </div>
+
+                <!-- MATRIX REFERENCE -->
+                <div class="lg:col-span-3 bg-white p-6 rounded-2xl border border-slate-200 card-shadow">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                        <h3 class="font-bold text-xs uppercase text-slate-400 tracking-widest border-l-4 border-sky-600 pl-2">Discount Value Reference Matrix</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="discount-matrix-container"></div>
+                </div>
+
+                <!-- School Fees -->
+                <div class="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 card-shadow">
+                    <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest border-l-4 border-amber-600 pl-2">Core Tuition Structure</h3>
+                    <div class="grid grid-cols-4">
+                        <div class="config-grid-header">Department / Grade</div>
+                        <div class="config-grid-header">Tuition (₱)</div>
+                        <div class="config-grid-header">Miscellaneous (₱)</div>
+                        <div class="config-grid-header">Robotics (₱)</div>
+                        <div id="grid-fees" class="contents"></div>
+                    </div>
+                </div>
+
+                <!-- Schedule Dates -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 card-shadow">
+                    <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest border-l-4 border-rose-600 pl-2">Schedule Dates</h3>
+                    <div class="space-y-4 mt-2" id="grid-dates">
+                        <div class="p-3 bg-slate-50 rounded-lg">
+                            <h4 class="text-[9px] font-black text-slate-400 uppercase mb-2">Semi-Annual</h4>
+                            <input type="text" id="date-semi-2" class="config-input !text-left">
+                        </div>
+                        <div class="p-3 bg-slate-50 rounded-lg">
+                            <h4 class="text-[9px] font-black text-slate-400 uppercase mb-2">Quarterly</h4>
+                            <div class="grid gap-2">
+                                <input type="text" id="date-quart-2" class="config-input !text-left">
+                                <input type="text" id="date-quart-3" class="config-input !text-left">
+                                <input type="text" id="date-quart-4" class="config-input !text-left">
+                            </div>
+                        </div>
+                        <div class="p-3 bg-slate-50 rounded-lg">
+                            <h4 class="text-[9px] font-black text-slate-400 uppercase mb-2">Monthly installments</h4>
+                            <input type="text" id="date-month-range" class="config-input !text-left">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION: ASSESSMENT PORTAL -->
+        <section id="sect-portal" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-6 space-y-6 no-print">
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h2 class="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 border-b pb-4 flex items-center">
+                        <span class="w-3 h-3 bg-blue-600 rounded-full mr-2"></span>
+                        1. Enrollment Context
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="md:col-span-2">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Student Name</label>
+                            <input type="text" id="stu-name" oninput="liveUpdate()" class="w-full bg-slate-50 border-slate-200 rounded-xl p-4 font-bold text-slate-700 focus:bg-white transition-all outline-none border focus:ring-2 focus:ring-blue-100 uppercase" placeholder="LAST NAME, FIRST NAME">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Department / Category</label>
+                            <select id="stu-grade" onchange="handleGradeCategoryChange()" class="w-full bg-slate-50 border-slate-200 rounded-xl p-4 font-bold text-slate-700 focus:bg-white transition-all outline-none border cursor-pointer"></select>
+                        </div>
+                        <div id="wrapper-specific-year" class="hidden">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Specific Year Level</label>
+                            <select id="stu-specific-year" onchange="liveUpdate()" class="w-full bg-blue-50 border-blue-200 rounded-xl p-4 font-bold text-blue-700 focus:bg-white transition-all outline-none border cursor-pointer"></select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Payment Plan</label>
+                            <select id="stu-plan" onchange="liveUpdate()" class="w-full bg-slate-50 border-slate-200 rounded-xl p-4 font-bold text-slate-700 focus:bg-white transition-all outline-none border cursor-pointer">
+                                <option value="Cash">Cash (Full Payment)</option>
+                                <option value="Semi">Semi-Annual</option>
+                                <option value="Quarterly">Quarterly</option>
+                                <option value="Monthly">Monthly Installment</option>
+                                <option value="NA">N/A</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h2 class="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 border-b pb-4 flex items-center">
+                        <span class="w-3 h-3 bg-indigo-600 rounded-full mr-2"></span>
+                        2. Books & Other Fees
+                    </h2>
+                    
+                    <div class="mb-8">
+                        <h3 class="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-wider">Book & Notebook Bundle</h3>
+                        <div id="books-single-check-container" class="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="chk-books-bundle" onchange="liveUpdate()" class="w-5 h-5 accent-blue-600">
+                                <div>
+                                    <div class="text-[11px] font-black text-blue-800 uppercase" id="label-book-bundle">Include Bundle</div>
+                                    <div class="text-[9px] text-blue-500 font-bold uppercase tracking-tighter" id="sublabel-book-price">Price based on grade level</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-8 pt-6 border-t border-slate-100">
+                        <h3 class="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-wider">Uniforms & Supplies</h3>
+                        <div id="supplies-input-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+                    </div>
+
+                    <div class="pt-6 border-t border-slate-100">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Custom Fees</h3>
+                            <button onclick="addAdhocRow()" class="text-[9px] font-bold bg-slate-900 text-white px-3 py-1.5 rounded-lg hover:bg-slate-700 transition-all">+ ADD CUSTOM FEE</button>
+                        </div>
+                        <div id="adhoc-fees-container" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" id="section-discounts">
+                    <h2 class="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 border-b pb-4 flex items-center">
+                        <span class="w-3 h-3 bg-teal-600 rounded-full mr-2"></span>
+                        3. Discounts (Applied to Tuition)
+                    </h2>
+                    <div id="discount-input-list" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h2 class="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 border-b pb-4 flex items-center">
+                        <span class="w-3 h-3 bg-emerald-600 rounded-full mr-2"></span>
+                        4. Payment Processing
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Amount Paid (₱)</label>
+                            <input type="text" id="pay-amount" oninput="handleNumericInput(event); liveUpdate();" class="w-full bg-emerald-50 border-emerald-200 rounded-xl p-4 font-black text-emerald-900 focus:bg-white transition-all outline-none border focus:ring-2 focus:ring-emerald-100 text-right text-lg" placeholder="0.00">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2" id="label-change">Change / Balance</label>
+                            <div id="pay-change-display" class="w-full bg-slate-100 border-slate-200 rounded-xl p-4 font-black border text-right text-lg transition-colors">₱ 0.00</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- E-Receipt Side -->
+            <div class="lg:col-span-6 space-y-6">
+                <div id="receipt-area" class="receipt-paper p-10 receipt-font border-2 border-black">
+                    <div class="text-center mb-10">
+                        <div class="font-black text-2xl tracking-tight uppercase mb-2">Fee Statement</div>
+                        <div class="text-xs text-black font-bold uppercase tracking-[0.2em] border-y border-black py-1 inline-block px-4">Official Assessment AY <span id="rec-ay">2025-2026</span></div>
+                    </div>
+
+                    <div class="border-b-2 border-black pb-6 mb-8 grid grid-cols-2 gap-y-3 text-sm">
+                        <div class="font-bold">STUDENT:</div><div class="text-right font-black uppercase break-words" id="rec-stu">---</div>
+                        <div class="font-bold">GRADE LEVEL:</div><div class="text-right font-black" id="rec-lvl">---</div>
+                        <div class="font-bold">PAYMENT PLAN:</div><div class="text-right font-black uppercase" id="rec-pln">---</div>
+                        <div class="font-bold">DATE GENERATED:</div><div class="text-right font-medium" id="rec-dat">---</div>
+                    </div>
+
+                    <div class="min-h-[200px] mb-8">
+                        <div class="flex justify-between border-b-2 border-black pb-2 mb-4 text-xs font-black">
+                            <span>PARTICULARS</span><span>AMOUNT (PHP)</span>
+                        </div>
+                        <div id="rec-lines" class="space-y-2 text-[13px] font-semibold"></div>
+                    </div>
+
+                    <div class="border-t-4 border-black pt-5 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="font-black text-xl">GRAND TOTAL:</span>
+                            <span class="font-black text-2xl" id="rec-total">₱ 0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center pt-2 text-sm">
+                            <span class="font-bold italic">AMOUNT TENDERED:</span>
+                            <span class="font-bold" id="rec-paid">₱ 0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="font-bold italic" id="rec-change-label">CHANGE:</span>
+                            <span class="font-bold" id="rec-change">₱ 0.00</span>
+                        </div>
+                    </div>
+
+                    <div id="rec-installment-box" class="mt-10 p-5 bg-white border-2 border-black hidden">
+                        <div class="text-xs font-black text-black uppercase mb-4 tracking-widest border-b border-black pb-1">Payment Schedule</div>
+                        <div id="rec-inst-list" class="space-y-3 text-xs"></div>
+                    </div>
+                    <div class="mt-12 text-center text-[10px] font-bold text-black uppercase">*** This document is for assessment purposes only ***</div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm no-print">
+                    <div class="flex flex-col items-center space-y-4">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Action Center</p>
+                        <button onclick="window.print()" class="w-full bg-slate-900 hover:bg-blue-900 text-white px-10 py-4 rounded-2xl font-black text-sm transition-all shadow-xl flex items-center justify-center">
+                            <span class="mr-2 text-xl">&#128424;</span> PRINT OFFICIAL STATEMENT
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const STORAGE_KEY = 'edufinance_config_2526_v2';
+        let isAuthenticated = false;
+
+        // --- AUTH LOGIC ---
+        function openLogin() {
+            if (isAuthenticated) {
+                switchTab('config');
+            } else {
+                document.getElementById('login-modal').classList.remove('hidden');
+                document.getElementById('login-modal').classList.add('flex');
+            }
+        }
+
+        function closeLogin(forceReset = false) {
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('login-modal').classList.remove('flex');
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('login-user').value = '';
+            document.getElementById('login-pass').value = '';
+            if (forceReset) switchTab('portal');
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const user = document.getElementById('login-user').value;
+            const pass = document.getElementById('login-pass').value;
+
+            // Secure configurations: Change these for production
+            if (user === 'admin' && pass === 'password123') {
+                isAuthenticated = true;
+                document.getElementById('admin-badge').classList.remove('hidden');
+                document.getElementById('admin-badge').classList.add('flex');
+                document.getElementById('nav-config-btn').classList.add('hidden');
+                closeLogin();
+                switchTab('config');
+            } else {
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+
+        function handleLogout() {
+            isAuthenticated = false;
+            document.getElementById('admin-badge').classList.add('hidden');
+            document.getElementById('admin-badge').classList.remove('flex');
+            document.getElementById('nav-config-btn').classList.remove('hidden');
+            switchTab('portal');
+        }
+
+        // --- DEFAULTS ---
+        const defaultConfig = {
+            academicYear: "2025-2026",
+            books: { 
+                "K1": 3410, "K2": 3410, "K3": 3880, 
+                "G1": 4420, "G2": 4600, "G3": 5425, "G4": 6570, "G5": 6740, "G6": 6095,
+                "G7": 5935, "G8": 5935, "G9": 4935, "G10": 4935,
+                "G11": 0, "G12": 0
+            },
+            supplies: [
+                { id: 1, name: "PE Uniform", price: 380 },
+                { id: 2, name: "Ribbon/Necktie (Pre)", price: 60 },
+                { id: 3, name: "Ribbon (Elem)", price: 40 },
+                { id: 4, name: "Necktie (JHS)", price: 190 },
+                { id: 5, name: "Necktie (SHS)", price: 190 },
+                { id: 6, name: "Belt (SHS)", price: 150 },
+                { id: 7, name: "ID & Lanyard", price: 150 }
+            ],
+            discounts: [
+                { id: 101, name: "Cash Discount", rate: 5 },
+                { id: 102, name: "Second Child", rate: 20 },
+                { id: 103, name: "Third Child", rate: 30 },
+                { id: 104, name: "Fourth Child", rate: 40 },
+                { id: 105, name: "Academic Scholar", rate: 50 }
+            ],
+            fees: {
+                "K1-K2": { t: 20000, m: 9520, r: 0, sE: 14760, sS: 14760, qE: 7380, qOct: 7380, qDec: 7380, qFeb: 7380, mE: 3280, mI: 3280, bookKey: "K1" },
+                "K3": { t: 21000, m: 9800, r: 0, sE: 15400, sS: 15400, qE: 7700, qOct: 7700, qDec: 7700, qFeb: 7700, mE: 3422, mI: 3422, bookKey: "K3" },
+                "ELEM": { t: 20500, m: 10000, r: 2500, sE: 17250, sS: 17250, qE: 8625, qOct: 8625, qDec: 8625, qFeb: 8625, mE: 3833, mI: 3833, bookKeyPrefix: "G" },
+                "JHS (Non-ESC)": { t: 23865, m: 10620, r: 3000, sE: 18742, sS: 18743, qE: 9371, qOct: 9371, qDec: 9371, qFeb: 9371, mE: 4165, mI: 4165, bookKeyPrefix: "G" },
+                "JHS (ESC)": { t: 19865, m: 10620, r: 3000, sE: 16742, sS: 16743, qE: 8371, qOct: 8371, qDec: 8371, qFeb: 8371, mE: 3720, mI: 3720, bookKeyPrefix: "G" },
+                "SHS (Non-QVR)": { t: 34950, m: 11050, r: 3500, sE: 24750, sS: 24750, qE: 12375, qOct: 12375, qDec: 12375, qFeb: 12375, mE: 5500, mI: 5500, bookKeyPrefix: "G" },
+                "SHS (QVR)": { t: 22000, m: 11050, r: 3500, sE: 18275, sS: 18275, qE: 9137, qOct: 9137, qDec: 9137, qFeb: 9137, mE: 4061, mI: 4061, bookKeyPrefix: "G" }
+            },
+            dates: {
+                semi: ["Upon Enrollment", "October 1-24, 2025"],
+                quart: ["Upon Enrollment", "October 2025", "December 2025", "February 2026"],
+                month: ["Upon Enrollment", "July 3, 2025 to March 3, 2026"]
+            }
+        };
+
+        let config = {};
+
+        function loadConfig() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                config = JSON.parse(saved);
+            } else {
+                config = JSON.parse(JSON.stringify(defaultConfig));
+            }
+        }
+
+        function saveConfigToStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        }
+
+        // --- NUMERIC FORMATTING HELPERS ---
+        function parseNum(val) {
+            if (!val) return 0;
+            if (typeof val === 'number') return val;
+            return parseFloat(val.toString().replace(/,/g, '')) || 0;
+        }
+
+        function formatNum(val) {
+            const n = parseNum(val);
+            return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+
+        function handleNumericInput(e) {
+            const input = e.target;
+            const originalValue = input.value;
+            const cleanedValue = originalValue.replace(/[^\d.]/g, '');
+            if (cleanedValue.includes('.')) {
+                const parts = cleanedValue.split('.');
+                input.value = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + parts[1].slice(0, 2);
+            } else {
+                input.value = cleanedValue.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            }
+        }
+
+        function switchTab(id) {
+            // Guard configuration tab with auth
+            if (id === 'config' && !isAuthenticated) {
+                openLogin();
+                return;
+            }
+
+            document.getElementById('sect-portal').classList.toggle('hidden', id !== 'portal');
+            document.getElementById('sect-config').classList.toggle('hidden', id !== 'config');
+            
+            const navPortal = document.getElementById('nav-portal');
+            const navConfigBtn = document.getElementById('nav-config-btn');
+            
+            if (id === 'portal') {
+                navPortal.className = 'tab-active py-5 text-xs uppercase tracking-widest transition-all';
+                if (!isAuthenticated) navConfigBtn.className = 'py-5 text-xs text-slate-400 uppercase tracking-widest transition-all hover:text-slate-600';
+            } else {
+                navPortal.className = 'py-5 text-xs text-slate-400 uppercase tracking-widest transition-all hover:text-slate-600';
+                if (!isAuthenticated) navConfigBtn.className = 'tab-active py-5 text-xs uppercase tracking-widest transition-all';
+                renderConfigDashboard();
+            }
+        }
+
+        function handleGradeCategoryChange() {
+            const category = document.getElementById('stu-grade').value;
+            const specificWrapper = document.getElementById('wrapper-specific-year');
+            const specificSelect = document.getElementById('stu-specific-year');
+            let options = [];
+            if (category === "ELEM") options = [1, 2, 3, 4, 5, 6].map(n => `Grade ${n}`);
+            else if (category.includes("JHS")) options = [7, 8, 9, 10].map(n => `Grade ${n}`);
+            else if (category.includes("SHS")) options = [11, 12].map(n => `Grade ${n}`);
+            
+            if (options.length > 0) {
+                specificWrapper.classList.remove('hidden');
+                specificSelect.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+            } else {
+                specificWrapper.classList.add('hidden');
+                specificSelect.innerHTML = '';
+            }
+            updateBookLabel();
+            liveUpdate();
+        }
+
+        function getTargetBookKey() {
+            const grade = document.getElementById('stu-grade').value;
+            const specificYear = document.getElementById('stu-specific-year').value;
+            const feeData = config.fees[grade];
+            if (!feeData) return null;
+            if (feeData.bookKey) return feeData.bookKey;
+            if (feeData.bookKeyPrefix && specificYear) {
+                const numArr = specificYear.match(/\d+/);
+                const num = numArr ? numArr[0] : "";
+                return feeData.bookKeyPrefix + num;
+            }
+            return null;
+        }
+
+        function updateBookLabel() {
+            const key = getTargetBookKey();
+            const label = document.getElementById('label-book-bundle');
+            const sublabel = document.getElementById('sublabel-book-price');
+            if (key && config.books[key] !== undefined) {
+                const price = config.books[key];
+                label.textContent = `Include Book Bundle (${key})`;
+                sublabel.textContent = `Total: ₱ ${price.toLocaleString()}`;
+            } else {
+                label.textContent = `Include Book Bundle`;
+                sublabel.textContent = `No bundle price set for this grade`;
+            }
+        }
+
+        function addAdhocRow() {
+            const container = document.getElementById('adhoc-fees-container');
+            const div = document.createElement('div');
+            div.className = "flex gap-2 items-center";
+            div.innerHTML = `
+                <input type="text" placeholder="Fee Description" oninput="liveUpdate()" class="adhoc-desc flex-grow bg-slate-50 border-slate-200 rounded-lg p-2 text-xs font-bold uppercase outline-none border focus:bg-white">
+                <input type="text" placeholder="Price" oninput="handleNumericInput(event); liveUpdate();" class="adhoc-price w-24 bg-slate-50 border-slate-200 rounded-lg p-2 text-xs font-bold outline-none border focus:bg-white text-right">
+                <button onclick="this.parentElement.remove(); liveUpdate();" class="text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+            `;
+            container.appendChild(div);
+        }
+
+        function line(label, amt, sub = false, color = 'text-black') {
+            return `<div class="flex justify-between items-center ${sub ? 'pl-4' : ''} ${color}"><span>${label}</span><span>${amt.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>`;
+        }
+
+        function instLine(label, amt, extra = "") {
+            return `<div class="flex justify-between border-b border-black border-dashed pb-1"><span class="font-bold uppercase tracking-tight text-[11px]">${label} ${extra}</span><span class="font-black text-sm">₱ ${amt.toLocaleString(undefined, {minimumFractionDigits:2})}</span></div>`;
+        }
+
+        function renderInstallments(grade, plan, extras, discount) {
+            const box = document.getElementById('rec-installment-box');
+            const list = document.getElementById('rec-inst-list');
+            list.innerHTML = '';
+            if(plan === 'Cash' || plan === 'NA') { box.classList.add('hidden'); return; }
+            box.classList.remove('hidden');
+            const f = config.fees[grade];
+            
+            if(plan === 'Semi') {
+                list.innerHTML += instLine(config.dates.semi[0], f.sE + extras - discount);
+                list.innerHTML += instLine(config.dates.semi[1], f.sS);
+            } else if(plan === 'Quarterly') {
+                list.innerHTML += instLine(config.dates.quart[0], f.qE + extras - discount);
+                list.innerHTML += instLine(config.dates.quart[1], f.qOct);
+                list.innerHTML += instLine(config.dates.quart[2], f.qDec);
+                list.innerHTML += instLine(config.dates.quart[3], f.qFeb);
+            } else if(plan === 'Monthly') {
+                list.innerHTML += instLine(config.dates.month[0], f.mE + extras - discount);
+                list.innerHTML += instLine(config.dates.month[1], f.mI, "(9 INSTALLMENTS)");
+            }
+        }
+
+        function liveUpdate() {
+            const name = document.getElementById('stu-name').value || '---';
+            const grade = document.getElementById('stu-grade').value;
+            const specificYear = document.getElementById('stu-specific-year').value;
+            const plan = document.getElementById('stu-plan').value;
+            const discountRadio = document.querySelector('input[name="disc"]:checked');
+            const discountRatePercent = discountRadio ? parseFloat(discountRadio.value) : 0;
+            const feeData = config.fees[grade];
+            
+            const isNA = plan === 'NA';
+            const discountSection = document.getElementById('section-discounts');
+            if (isNA) discountSection.classList.add('hidden');
+            else discountSection.classList.remove('hidden');
+
+            if (!feeData) return;
+
+            document.getElementById('rec-stu').textContent = name;
+            document.getElementById('rec-ay').textContent = config.academicYear || "2025-2026";
+            document.getElementById('rec-lvl').textContent = specificYear ? `${grade} (${specificYear})` : grade;
+            document.getElementById('rec-pln').textContent = isNA ? 'Not Applicable' : plan;
+
+            const tuit = isNA ? 0 : feeData.t;
+            const misc = isNA ? 0 : feeData.m;
+            const robotics = isNA ? 0 : (feeData.r || 0);
+            const discountAmount = isNA ? 0 : (tuit * (discountRatePercent / 100));
+            
+            let extrasTotal = 0;
+            const recLines = document.getElementById('rec-lines');
+            recLines.innerHTML = "";
+            
+            if (!isNA) {
+                recLines.innerHTML += line("TUITION FEE", tuit);
+                if (discountAmount > 0) recLines.innerHTML += line(`LESS: DISCOUNT (${discountRatePercent}%)`, -discountAmount, false, 'text-black italic font-bold');
+                recLines.innerHTML += line("MISCELLANEOUS FEES", misc);
+                if (robotics > 0) recLines.innerHTML += line("ROBOTICS FEE", robotics);
+            }
+
+            const bookChecked = document.getElementById('chk-books-bundle').checked;
+            if (bookChecked) {
+                const bookKey = getTargetBookKey();
+                const bookPrice = config.books[bookKey] || 0;
+                if (bookPrice > 0) {
+                    extrasTotal += bookPrice;
+                    recLines.innerHTML += line(`* BOOKS/NOTEBOOKS (${bookKey})`, bookPrice, true);
+                }
+            }
+
+            document.querySelectorAll('.portal-item-qty').forEach(input => {
+                const qty = parseInt(input.value) || 0;
+                if(qty > 0) {
+                    const item = config.supplies.find(s => s.id === parseInt(input.getAttribute('data-item-id')));
+                    if(item) {
+                        extrasTotal += item.price * qty;
+                        recLines.innerHTML += line(`* ${item.name} x${qty}`, item.price * qty, true);
+                    }
+                }
+            });
+
+            document.querySelectorAll('#adhoc-fees-container > div').forEach(row => {
+                const desc = row.querySelector('.adhoc-desc').value.trim();
+                const price = parseNum(row.querySelector('.adhoc-price').value);
+                if (price !== 0) {
+                    extrasTotal += price;
+                    recLines.innerHTML += line(`* ${desc || 'OTHER FEE'}`, price, true);
+                }
+            });
+
+            const grandTotal = (isNA ? 0 : (tuit - discountAmount + misc + robotics)) + extrasTotal;
+            document.getElementById('rec-total').textContent = `₱ ${grandTotal.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            
+            const amountPaidStr = document.getElementById('pay-amount').value;
+            const amountPaid = parseNum(amountPaidStr);
+            const change = amountPaid - grandTotal;
+            
+            const displayEl = document.getElementById('pay-change-display');
+            displayEl.textContent = `₱ ${change.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            
+            if (change < 0) {
+                displayEl.classList.remove('bg-slate-100', 'text-slate-900', 'text-emerald-700', 'bg-emerald-50');
+                displayEl.classList.add('bg-rose-50', 'text-rose-700', 'border-rose-200');
+                document.getElementById('rec-change-label').textContent = "BALANCE DUE:";
+                document.getElementById('label-change').textContent = "Balance Due (Short)";
+            } else if (change > 0) {
+                displayEl.classList.remove('bg-slate-100', 'text-slate-900', 'text-rose-700', 'bg-rose-50');
+                displayEl.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+                document.getElementById('rec-change-label').textContent = "CHANGE:";
+                document.getElementById('label-change').textContent = "Computed Change";
+            } else {
+                displayEl.className = "w-full bg-slate-100 border-slate-200 rounded-xl p-4 font-black border text-right text-lg transition-colors";
+                document.getElementById('rec-change-label').textContent = "CHANGE:";
+                document.getElementById('label-change').textContent = "Change / Balance";
+            }
+
+            document.getElementById('rec-paid').textContent = `₱ ${amountPaid.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            document.getElementById('rec-change').textContent = `₱ ${change.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+
+            renderInstallments(grade, plan, extrasTotal, discountAmount);
+        }
+
+        function updateMatrixTuition(deptId, newVal) {
+            const targetVal = parseNum(newVal);
+            if(config.fees[deptId]) config.fees[deptId].t = targetVal;
+            const percentages = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+            percentages.forEach(p => {
+                const cell = document.getElementById(`matrix-val-${deptId.replace(/\s+/g, '-')}-${p}`);
+                if (cell) cell.textContent = `₱${(targetVal * (p / 100)).toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            });
+        }
+
+        function renderDiscountMatrix() {
+            const depts = [{ name: "NJK", ref: "K1-K2" }, { name: "Elementary", ref: "ELEM" }, { name: "JHS", ref: "JHS (Non-ESC)" }, { name: "SHS", ref: "SHS (Non-QVR)" }];
+            const percentages = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+            const container = document.getElementById('discount-matrix-container');
+            if (!container) return;
+            container.innerHTML = '';
+            depts.forEach(dept => {
+                const tuition = config.fees[dept.ref].t;
+                const deptIdClean = dept.ref.replace(/\s+/g, '-');
+                let html = `<div><table class="matrix-table"><thead><tr><th colspan="2">Discounts (${dept.name})</th></tr></thead><tbody>`;
+                html += `<tr class="bg-sky-50"><td class="!bg-sky-100 !text-sky-700">BASE</td><td><input type="text" value="${formatNum(tuition)}" class="matrix-input font-bold text-sky-800" onkeyup="handleNumericInput(event); updateMatrixTuition('${dept.ref}', this.value)"></td></tr>`;
+                percentages.forEach(p => { html += `<tr><td>${p}%</td><td id="matrix-val-${deptIdClean}-${p}">₱${(tuition * (p/100)).toLocaleString(undefined, {minimumFractionDigits:2})}</td></tr>`; });
+                html += `</tbody></table></div>`;
+                container.innerHTML += html;
+            });
+        }
+
+        function renderConfigDashboard() {
+            document.getElementById('config-ay').value = config.academicYear || "2025-2026";
+            document.getElementById('grid-books').innerHTML = Object.entries(config.books).map(([g, p]) => `<div class="config-grid-cell font-bold text-slate-500 text-[10px] uppercase bg-white">${g}</div><div class="config-grid-cell"><input type="text" data-ref="book-${g}" value="${formatNum(p)}" onkeyup="handleNumericInput(event)" class="config-input"></div>`).join('');
+            document.getElementById('grid-supplies').innerHTML = config.supplies.map((item) => `<div class="config-grid-cell"><input type="text" data-sup-name-id="${item.id}" value="${item.name}" class="config-input !text-[9px] font-bold text-slate-600 uppercase !text-left"></div><div class="config-grid-cell"><input type="text" data-sup-price-id="${item.id}" value="${formatNum(item.price)}" onkeyup="handleNumericInput(event)" class="config-input"></div>`).join('');
+            document.getElementById('grid-discounts').innerHTML = config.discounts.map((item) => `<div class="config-grid-cell"><input type="text" data-disc-name-id="${item.id}" value="${item.name}" class="config-input !text-[9px] font-bold text-slate-600 uppercase !text-left"></div><div class="config-grid-cell"><input type="text" data-disc-rate-id="${item.id}" value="${item.rate}" onkeyup="handleNumericInput(event)" class="config-input"></div>`).join('');
+            document.getElementById('grid-fees').innerHTML = Object.entries(config.fees).map(([g, v]) => `<div class="config-grid-cell font-bold text-slate-500 text-[10px]">${g}</div><div class="config-grid-cell"><input type="text" data-ref="fee-t-${g}" value="${formatNum(v.t)}" onkeyup="handleNumericInput(event)" class="config-input"></div><div class="config-grid-cell"><input type="text" data-ref="fee-m-${g}" value="${formatNum(v.m)}" onkeyup="handleNumericInput(event)" class="config-input"></div><div class="config-grid-cell"><input type="text" data-ref="fee-r-${g}" value="${formatNum(v.r)}" onkeyup="handleNumericInput(event)" class="config-input"></div>`).join('');
+            
+            document.getElementById('date-semi-2').value = config.dates.semi[1] || "";
+            document.getElementById('date-quart-2').value = config.dates.quart[1] || "";
+            document.getElementById('date-quart-3').value = config.dates.quart[2] || "";
+            document.getElementById('date-quart-4').value = config.dates.quart[3] || "";
+            document.getElementById('date-month-range').value = config.dates.month[1] || "";
+            
+            renderDiscountMatrix();
+        }
+
+        function scrapeAllConfigInputs() {
+            config.academicYear = document.getElementById('config-ay').value.trim();
+            document.querySelectorAll('[data-ref^="book-"]').forEach(el => config.books[el.getAttribute('data-ref').replace('book-', '')] = parseNum(el.value));
+            const newSupplies = [];
+            document.querySelectorAll('[data-sup-name-id]').forEach(i => { const id = parseInt(i.getAttribute('data-sup-name-id')); newSupplies.push({ id, name: i.value.trim(), price: parseNum(document.querySelector(`[data-sup-price-id="${id}"]`).value) }); });
+            config.supplies = newSupplies;
+            const newDiscounts = [];
+            document.querySelectorAll('[data-disc-name-id]').forEach(i => { const id = parseInt(i.getAttribute('data-disc-name-id')); newDiscounts.push({ id, name: i.value.trim(), rate: parseNum(document.querySelector(`[data-disc-rate-id="${id}"]`).value) }); });
+            config.discounts = newDiscounts;
+            Object.entries(config.fees).forEach(([g, v]) => { ['t', 'm', 'r'].forEach(key => { const el = document.querySelector(`[data-ref="fee-${key}-${g}"]`); if(el) config.fees[g][key] = parseNum(el.value); }); });
+            config.dates.semi[1] = document.getElementById('date-semi-2').value;
+            config.dates.quart[1] = document.getElementById('date-quart-2').value;
+            config.dates.quart[2] = document.getElementById('date-quart-3').value;
+            config.dates.quart[3] = document.getElementById('date-quart-4').value;
+            config.dates.month[1] = document.getElementById('date-month-range').value;
+        }
+
+        function addNewSupply() { scrapeAllConfigInputs(); config.supplies.push({ id: Date.now(), name: "NEW ITEM", price: 0 }); renderConfigDashboard(); }
+        function addNewDiscount() { scrapeAllConfigInputs(); config.discounts.push({ id: Date.now(), name: "NEW DISCOUNT", rate: 0 }); renderConfigDashboard(); }
+        
+        function renderPortalInputs() {
+            const gSelect = document.getElementById('stu-grade');
+            const currentGrade = gSelect.value;
+            gSelect.innerHTML = Object.keys(config.fees).map(g => `<option value="${g}">${g}</option>`).join('');
+            if(currentGrade && config.fees[currentGrade]) gSelect.value = currentGrade;
+            handleGradeCategoryChange();
+            document.getElementById('supplies-input-list').innerHTML = config.supplies.map((item) => `<div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200"><span class="text-[10px] font-bold text-slate-500 truncate mr-2 uppercase">${item.name} (₱${item.price.toLocaleString()})</span><input type="number" min="0" value="0" data-item-id="${item.id}" oninput="liveUpdate()" class="portal-item-qty w-12 p-1 border rounded text-center text-xs font-bold"></div>`).join('');
+            const currentDiscId = document.querySelector('input[name="disc"]:checked')?.getAttribute('data-disc-id') || "0";
+            document.getElementById('discount-input-list').innerHTML = `<label class="flex items-center p-3 border rounded-xl cursor-pointer hover:bg-slate-50"><input type="radio" name="disc" data-disc-id="0" value="0" ${currentDiscId === "0" ? 'checked' : ''} onchange="liveUpdate()" class="accent-blue-600"><span class="ml-2 text-[10px] font-black uppercase">None</span></label>` + config.discounts.map((item) => `<label class="flex items-center p-3 border rounded-xl cursor-pointer hover:bg-slate-50"><input type="radio" name="disc" data-disc-id="${item.id}" value="${item.rate}" ${currentDiscId === String(item.id) ? 'checked' : ''} onchange="liveUpdate()" class="accent-blue-600"><span class="ml-2 text-[10px] font-black uppercase">${item.name} (${(item.rate).toFixed(0)}%)</span></label>`).join('');
+            updateBookLabel();
+        }
+
+        function saveAndSync() { 
+            scrapeAllConfigInputs(); 
+            saveConfigToStorage();
+            renderPortalInputs(); 
+            liveUpdate(); 
+            switchTab('portal'); 
+        }
+
+        window.onload = () => {
+            loadConfig();
+            renderPortalInputs();
+            document.getElementById('rec-dat').textContent = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+            liveUpdate();
+            // Start at portal, but keep login hidden unless clicked
+            closeLogin();
+        };
+    </script>
+</body>
+</html>
